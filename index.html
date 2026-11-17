@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>경찰 기동대 스마트 근무표</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        body { font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; }
+        .capture-wrapper { position: absolute; left: -9999px; top: -9999px; }
+        input::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useRef, useMemo } = React;
+
+        const App = () => {
+            const [title, setTitle] = useState("2026-10-24 광1 (일근제대)");
+            const [totalCount, setTotalCount] = useState("21");
+            const [activeCount, setActiveCount] = useState("16");
+            const [dutyTeam, setDutyTeam] = useState("당직 3팀");
+            
+            const [personnelNotes, setPersonnelNotes] = useState("경감 박종석 18:30 조퇴\n순경 성준영 17시 조퇴");
+            const [eventNotes, setEventNotes] = useState("일6 근무자(개문시~09시, 18시~폐문시)\n→정출에서 일1과 같이 근무\n\n초록색은 야간대교 있습니다.");
+            
+            const [leaders, setLeaders] = useState("최영규, 윤현수");
+            const [isLeaderIncluded, setIsLeaderIncluded] = useState(true);
+
+            const [team1, setTeam1] = useState("서동준\n안창성\n윤현수\n이동수\n심규성\n최영규");
+            const [team2, setTeam2] = useState("유제민\n이준호\n안대철\n최장원:θ");
+            const [team3, setTeam3] = useState("김희수:θ\n이주원\n박종석\n고창희");
+            const [team4, setTeam4] = useState("김민구\n박인태\n성준영\n황백규\n정진원\n김성현:항해사");
+            
+            const [teamActive, setTeamActive] = useState(["4명", "3명", "4명", "5명"]);
+            
+            const [excludedNames, setExcludedNames] = useState(["최장원", "김희수"]);
+            
+            const toggleExclude = (name) => {
+                setExcludedNames(prev => 
+                    prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+                );
+            };
+            
+            const [locations, setLocations] = useState([
+                { text: "광8", color: "" }, 
+                { text: "광9", color: "" }, 
+                { text: "광10", color: "" }, 
+                { text: "기타", color: "" }
+            ]);
+            
+            const defaultTimes = ["07:40", "08:40", "09:40", "10:40", "11:40", "12:40", "13:40", "14:40", "15:40", "16:40", "17:40", "18:40", "19:40"];
+            
+            const [schedule, setSchedule] = useState(defaultTimes.map((t, idx) => ({
+                time: t,
+                timeColor: "",
+                cells: idx === 0 ? ["서동준", "", "", "-"] : ["", "", "", "-"]
+            })));
+
+            const captureRef = useRef(null);
+
+            const handleSaveImage = () => {
+                const container = captureRef.current;
+                html2canvas(container, { scale: 2.5, backgroundColor: '#ffffff' }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `기동대_근무표(전체순환)_${title}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                });
+            };
+
+            const addLocation = () => {
+                setLocations([...locations, { text: "새 근무지", color: "" }]);
+                setSchedule(schedule.map(row => ({ ...row, cells: [...row.cells, ""] })));
+            };
+
+            const removeLocation = (index) => {
+                setLocations(locations.filter((_, i) => i !== index));
+                setSchedule(schedule.map(row => ({ ...row, cells: row.cells.filter((_, i) => i !== index) })));
+            };
+
+            const updateLocation = (index, value) => {
+                const newLocs = [...locations];
+                newLocs[index].text = value;
+                setLocations(newLocs);
+            };
+
+            const toggleLocationColor = (index) => {
+                const newLocs = [...locations];
+                const curr = newLocs[index].color;
+                newLocs[index].color = curr === "" ? "bg-yellow-200" : (curr === "bg-yellow-200" ? "bg-green-300" : "");
+                setLocations(newLocs);
+            };
+
+            const updateTime = (index, value) => {
+                const newSchedule = [...schedule];
+                newSchedule[index].time = value;
+                setSchedule(newSchedule);
+            };
+
+            const toggleTimeColor = (index) => {
+                const newSched = [...schedule];
+                const curr = newSched[index].timeColor;
+                newSched[index].timeColor = curr === "" ? "bg-yellow-200" : (curr === "bg-yellow-200" ? "bg-green-300" : "");
+                setSchedule(newSched);
+            };
+
+            const updateCell = (rIndex, cIndex, value) => {
+                const newSchedule = [...schedule];
+                newSchedule[rIndex].cells[cIndex] = value;
+                setSchedule(newSchedule);
+            };
+
+            const addRow = () => {
+                setSchedule([...schedule, { time: "00:00", timeColor: "", cells: Array(locations.length).fill("") }]);
+            };
+            
+            const removeRow = (index) => {
+                setSchedule(schedule.filter((_, i) => i !== index));
+            };
+
+            const updateTeamActive = (index, value) => {
+                const newActive = [...teamActive];
+                newActive[index] = value;
+                setTeamActive(newActive);
+            };
+
+            const workCounts = useMemo(() => {
+                const counts = {};
+                schedule.forEach(row => {
+                    row.cells.forEach(cell => {
+                        const name = cell.trim();
+                        if (name && name !== "-") {
+                            counts[name] = (counts[name] || 0) + 1;
+                        }
+                    });
+                });
+                return counts;
+            }, [schedule]);
+
+            const leaderArray = leaders.split(',').map(s => s.trim()).filter(Boolean);
+            
+            const parseTeamMembers = (teamStr) => {
+                return teamStr.split('\n').map(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) return null;
+                    let name = trimmed;
+                    let display = null;
+                    if (trimmed.includes(':')) {
+                        const parts = trimmed.split(':');
+                        name = parts[0].trim();
+                        display = parts[1].trim();
+                    }
+                    
+                    const isLeader = leaderArray.includes(name);
+                    const isExcluded = excludedNames.includes(name) || (isLeader && !isLeaderIncluded);
+                    
+                    return { 
+                        name, 
+                        display: display !== null ? display : (workCounts[name] || 0), 
+                        isExcluded,
+                        isLeader
+                    };
+                }).filter(Boolean);
+            };
+
+            const t1 = parseTeamMembers(team1);
+            const t2 = parseTeamMembers(team2);
+            const t3 = parseTeamMembers(team3);
+            const t4 = parseTeamMembers(team4);
+            const maxRows = Math.max(t1.length, t2.length, t3.length, t4.length) || 1;
+
+            const allActiveMembers = [...t1, ...t2, ...t3, ...t4].filter(m => m && !m.isExcluded).map(m => m.name);
+
+            const globalAutoFill = () => {
+                if (allActiveMembers.length === 0) {
+                    alert("배치할 수 있는 근무자가 명단에 없습니다.");
+                    return;
+                }
+
+                const firstWorker = schedule[0].cells[0].trim();
+                if (!firstWorker || firstWorker === "-") {
+                    alert("가장 첫 번째 시간(최상단 좌측)에 시작할 대원 이름을 입력해주세요.");
+                    return;
+                }
+
+                let currentIndex = allActiveMembers.indexOf(firstWorker);
+                if (currentIndex === -1) {
+                    alert(`'${firstWorker}' 대원을 현재 명단에서 찾을 수 없습니다.`);
+                    return;
+                }
+
+                const leaderSet = new Set(leaderArray);
+                const currentCounts = {};
+                currentCounts[firstWorker] = 1;
+
+                const newSchedule = schedule.map((row, rIndex) => {
+                    const newCells = [...row.cells];
+                    for (let cIndex = 0; cIndex < newCells.length; cIndex++) {
+                        if (rIndex === 0 && cIndex === 0) continue; 
+                        if (newCells[cIndex] === "-") continue;
+
+                        let assigned = false;
+                        let attempts = 0;
+
+                        while (attempts < allActiveMembers.length) {
+                            currentIndex = (currentIndex + 1) % allActiveMembers.length;
+                            let candidate = allActiveMembers[currentIndex];
+                            let candCount = currentCounts[candidate] || 0;
+
+                            if (leaderSet.has(candidate) && candCount >= 1) {
+                                attempts++;
+                                continue;
+                            }
+
+                            newCells[cIndex] = candidate;
+                            currentCounts[candidate] = candCount + 1;
+                            assigned = true;
+                            break;
+                        }
+
+                        if (!assigned) {
+                            currentIndex = (currentIndex + 1) % allActiveMembers.length;
+                            newCells[cIndex] = allActiveMembers[currentIndex];
+                        }
+                    }
+                    return { ...row, cells: newCells };
+                });
+                
+                setSchedule(newSchedule);
+            };
+
+            return (
+                <div className="relative">
+                    <datalist id="active-members">
+                        {allActiveMembers.map((name, idx) => (
+                            <option key={`dl-${idx}`} value={name} />
+                        ))}
+                        <option value="-" />
+                    </datalist>
+
+                    <div className="min-h-screen p-4 flex flex-col gap-6 max-w-3xl mx-auto pb-24">
+                        <h2 className="text-2xl font-black text-gray-800 text-center tracking-tight">📱 근무표 에디터 (전체순환형)</h2>
+                        
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex flex-col gap-4">
+                            <h3 className="font-bold text-lg border-b border-gray-100 pb-2 text-blue-700">1. 기본 설정</h3>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-600 mb-1">제목 (날짜 및 제대)</label>
+                                <input className="w-full border border-gray-300 rounded-lg p-2.5 outline-none" value={title} onChange={e => setTitle(e.target.value)} />
+                            </div>
+                            <div className="flex gap-3">
+                                <div className="w-1/2">
+                                    <label className="block text-sm font-semibold text-gray-600 mb-1">총원</label>
+                                    <input className="w-full border border-gray-300 rounded-lg p-2.5 outline-none" value={totalCount} onChange={e => setTotalCount(e.target.value)} />
+                                </div>
+                                <div className="w-1/2">
+                                    <label className="block text-sm font-semibold text-gray-600 mb-1">실근무</label>
+                                    <input className="w-full border border-gray-300 rounded-lg p-2.5 outline-none" value={activeCount} onChange={e => setActiveCount(e.target.value)} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-yellow-50/80 rounded-2xl shadow-sm border-2 border-yellow-300 p-5 flex flex-col gap-3">
+                            <h3 className="font-extrabold text-lg text-yellow-900 border-b-2 border-yellow-300 pb-2">👑 지휘부 (수인/제대장) 특별 관리</h3>
+                            <div className="flex gap-2 items-center mt-1">
+                                <input 
+                                    className="w-full border-2 border-yellow-400 rounded-lg p-2.5 text-sm font-extrabold outline-none bg-white text-gray-900" 
+                                    value={leaders} 
+                                    onChange={e => setLeaders(e.target.value)} 
+                                    placeholder="이름을 쉼표(,)로 구분 (예: 최영규, 윤현수)"
+                                />
+                                <button
+                                    onClick={() => setIsLeaderIncluded(!isLeaderIncluded)}
+                                    className={`min-w-[125px] px-3 py-3 text-[13px] font-extrabold rounded-lg transition shadow-sm ${isLeaderIncluded ? 'bg-blue-600 text-white' : 'bg-red-500 text-white'}`}
+                                >
+                                    {isLeaderIncluded ? '순환 포함 (1회)' : '순환 일괄 제외'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex flex-col gap-4">
+                            <h3 className="font-bold text-lg border-b border-gray-100 pb-2 text-blue-700">2. 부대 명단</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="flex flex-col">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">1팀 명단</label>
+                                    <textarea className="w-full border border-gray-300 rounded-lg p-2 text-sm resize-none outline-none" rows="6" value={team1} onChange={e => setTeam1(e.target.value)}></textarea>
+                                    <div className="mt-2 flex flex-wrap gap-1 min-h-[30px]">
+                                        {t1.map((m, idx) => (
+                                            <button key={idx} onClick={() => toggleExclude(m.name)} className={`px-2 py-1 text-xs font-bold rounded ${m.isExcluded ? 'bg-gray-200 text-gray-400 line-through' : (m.isLeader ? 'bg-[#fde047] text-yellow-900 border border-yellow-400' : 'bg-blue-100 text-blue-700')}`}>
+                                                {m.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input className="w-full mt-2 border border-gray-300 rounded p-1.5 text-sm text-center font-bold bg-gray-50" value={teamActive[0]} onChange={e => updateTeamActive(0, e.target.value)} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">2팀 명단</label>
+                                    <textarea className="w-full border border-gray-300 rounded-lg p-2 text-sm resize-none outline-none" rows="6" value={team2} onChange={e => setTeam2(e.target.value)}></textarea>
+                                    <div className="mt-2 flex flex-wrap gap-1 min-h-[30px]">
+                                        {t2.map((m, idx) => (
+                                            <button key={idx} onClick={() => toggleExclude(m.name)} className={`px-2 py-1 text-xs font-bold rounded ${m.isExcluded ? 'bg-gray-200 text-gray-400 line-through' : (m.isLeader ? 'bg-[#fde047] text-yellow-900 border border-yellow-400' : 'bg-blue-100 text-blue-700')}`}>
+                                                {m.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input className="w-full mt-2 border border-gray-300 rounded p-1.5 text-sm text-center font-bold bg-gray-50" value={teamActive[1]} onChange={e => updateTeamActive(1, e.target.value)} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">3팀 명단</label>
+                                    <textarea className="w-full border border-gray-300 rounded-lg p-2 text-sm resize-none outline-none" rows="6" value={team3} onChange={e => setTeam3(e.target.value)}></textarea>
+                                    <div className="mt-2 flex flex-wrap gap-1 min-h-[30px]">
+                                        {t3.map((m, idx) => (
+                                            <button key={idx} onClick={() => toggleExclude(m.name)} className={`px-2 py-1 text-xs font-bold rounded ${m.isExcluded ? 'bg-gray-200 text-gray-400 line-through' : (m.isLeader ? 'bg-[#fde047] text-yellow-900 border border-yellow-400' : 'bg-blue-100 text-blue-700')}`}>
+                                                {m.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input className="w-full mt-2 border border-gray-300 rounded p-1.5 text-sm text-center font-bold bg-gray-50" value={teamActive[2]} onChange={e => updateTeamActive(2, e.target.value)} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">4팀 명단</label>
+                                    <textarea className="w-full border border-gray-300 rounded-lg p-2 text-sm resize-none outline-none" rows="6" value={team4} onChange={e => setTeam4(e.target.value)}></textarea>
+                                    <div className="mt-2 flex flex-wrap gap-1 min-h-[30px]">
+                                        {t4.map((m, idx) => (
+                                            <button key={idx} onClick={() => toggleExclude(m.name)} className={`px-2 py-1 text-xs font-bold rounded ${m.isExcluded ? 'bg-gray-200 text-gray-400 line-through' : (m.isLeader ? 'bg-[#fde047] text-yellow-900 border border-yellow-400' : 'bg-blue-100 text-blue-700')}`}>
+                                                {m.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input className="w-full mt-2 border border-gray-300 rounded p-1.5 text-sm text-center font-bold bg-gray-50" value={teamActive[3]} onChange={e => updateTeamActive(3, e.target.value)} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex flex-col gap-4">
+                            <h3 className="font-bold text-lg border-b border-gray-100 pb-2 text-blue-700">3. 당직 및 금일 상황</h3>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-600 mb-1">당직</label>
+                                <input className="w-full border border-gray-300 rounded-lg p-2.5 outline-none" value={dutyTeam} onChange={e => setDutyTeam(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-600 mb-1">인원 변동 (조퇴/외출/지각 등)</label>
+                                <textarea className="w-full border border-gray-300 rounded-lg p-2.5 resize-none outline-none" rows="2" value={personnelNotes} onChange={e => setPersonnelNotes(e.target.value)}></textarea>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-600 mb-1">집회 상황 및 지시사항</label>
+                                <textarea className="w-full border border-gray-300 rounded-lg p-2.5 resize-none outline-none" rows="3" value={eventNotes} onChange={e => setEventNotes(e.target.value)}></textarea>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex flex-col gap-4">
+                            <h3 className="font-bold text-lg border-b border-gray-100 pb-2 text-blue-700">4. 시간표 작성 (전체 자동 순환배치)</h3>
+                            <button onClick={globalAutoFill} className="w-full bg-[#1e3a8a] text-white font-extrabold py-3.5 rounded-lg shadow-md hover:bg-blue-800 transition flex items-center justify-center gap-2 mb-2">
+                                ⚡ 첫 근무자 기준 전체 자동 순환배치
+                            </button>
+
+                            <div className="overflow-x-auto -mx-5 px-5 pb-2">
+                                <table className="w-full border-collapse text-center text-sm md:text-base min-w-[500px]">
+                                    <thead>
+                                        <tr className="bg-gray-100 border-y-2 border-gray-500">
+                                            <th className="py-2 px-1 border-x border-gray-300 w-16 md:w-20">시간</th>
+                                            {locations.map((loc, i) => (
+                                                <th key={i} className={`py-3 px-1 border-x border-gray-300 relative group min-w-[80px] ${loc.color}`}>
+                                                    <button onClick={() => toggleLocationColor(i)} className="hide-on-capture absolute top-1 left-1 w-3.5 h-3.5 rounded-full border border-gray-400 z-10" style={{ backgroundColor: loc.color === 'bg-yellow-200' ? '#fef08a' : loc.color === 'bg-green-300' ? '#86efac' : '#ffffff' }}></button>
+                                                    <input className="w-full text-center outline-none bg-transparent font-bold text-gray-800 text-lg" value={loc.text} onChange={e => updateLocation(i, e.target.value)} />
+                                                    <button onClick={() => removeLocation(i)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 shadow">×</button>
+                                                </th>
+                                            ))}
+                                            <th className="py-2 px-1 w-12 align-middle border-none">
+                                                <button onClick={addLocation} className="text-blue-600 font-bold bg-blue-100 rounded px-2 py-1 w-full text-xs">+</button>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {schedule.map((row, rIndex) => (
+                                            <tr key={rIndex} className="border-b border-gray-300 relative group hover:bg-gray-50">
+                                                <td className={`py-2 px-1 border-x border-gray-300 font-semibold relative ${row.timeColor || 'bg-gray-50'}`}>
+                                                    <button onClick={() => toggleTimeColor(rIndex)} className="hide-on-capture absolute top-1 left-1 w-3.5 h-3.5 rounded-full border border-gray-400 z-10" style={{ backgroundColor: row.timeColor === 'bg-yellow-200' ? '#fef08a' : row.timeColor === 'bg-green-300' ? '#86efac' : '#ffffff' }}></button>
+                                                    <input className="w-full text-center outline-none bg-transparent" value={row.time} onChange={e => updateTime(rIndex, e.target.value)} />
+                                                </td>
+                                                {row.cells.map((cell, cIndex) => (
+                                                    <td key={cIndex} className="py-2 px-1 border-x border-gray-300">
+                                                        <input className="w-full text-center outline-none bg-transparent" value={cell} onChange={e => updateCell(rIndex, cIndex, e.target.value)} list="active-members" placeholder="입력" />
+                                                    </td>
+                                                ))}
+                                                <td className="py-2 px-1 align-middle border-none">
+                                                    <button onClick={() => removeRow(rIndex)} className="text-red-400 font-bold text-xl px-2 w-full">×</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button onClick={addRow} className="w-full bg-gray-50 text-gray-600 py-3 rounded-lg border-2 border-dashed border-gray-300 font-bold mt-2">+ 시간대 추가</button>
+                        </div>
+
+                        <div className="fixed bottom-4 left-0 right-0 px-4 md:static md:px-0 z-50">
+                            <button onClick={handleSaveImage} className="w-full max-w-3xl mx-auto bg-[#fae100] text-[#371d1e] font-black py-4 px-6 rounded-2xl shadow-lg hover:bg-[#e5cf00] transition flex items-center justify-center gap-3 text-lg border border-[#e5cf00]">
+                                이미지로 변환 (완성형)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="capture-wrapper">
+                        <div ref={captureRef} className="w-[1250px] min-h-[700px] bg-white p-10 font-sans text-gray-900 border border-transparent">
+                            <h1 className="text-4xl font-extrabold text-center mb-8 tracking-tight">{title}</h1>
+                            
+                            <div className="flex gap-6">
+                                <div className="w-[55%] flex flex-col">
+                                    <table className="w-full border-collapse text-center">
+                                        <thead>
+                                            <tr className="bg-gray-100 border-y-2 border-gray-800">
+                                                <th className="py-3 px-2 border-x border-gray-400 w-24 text-lg font-extrabold text-gray-900">시간</th>
+                                                {locations.map((loc, i) => (
+                                                    <th key={i} className={`py-3 px-2 border-x border-gray-400 text-lg font-extrabold text-gray-900 ${loc.color}`}>{loc.text}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {schedule.map((row, rIndex) => (
+                                                <tr key={rIndex} className="border-b border-gray-300">
+                                                    <td className={`py-3 px-2 border-x border-gray-400 font-extrabold text-gray-900 text-lg ${row.timeColor || 'bg-gray-50'}`}>{row.time}</td>
+                                                    {row.cells.map((cell, cIndex) => (
+                                                        <td key={cIndex} className="py-3 px-2 border-x border-gray-400 text-lg font-semibold text-gray-800">{cell}</td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="w-[45%] flex flex-col gap-4">
+                                    <table className="w-full border-collapse text-center border-2 border-gray-900 bg-white">
+                                        <thead>
+                                            <tr className="border-b-2 border-gray-900 font-bold text-lg">
+                                                <td colSpan="4" className="border-r border-gray-900 py-1.5 bg-gray-50">총원 {totalCount}명</td>
+                                                <td colSpan="4" className="py-1.5 bg-gray-50">실근무 {activeCount}명</td>
+                                            </tr>
+                                            <tr className="bg-[#dbeafe] border-b border-gray-900 text-base">
+                                                <th colSpan="2" className="border-r border-gray-900 py-1 font-extrabold text-blue-900">1팀</th>
+                                                <th colSpan="2" className="border-r border-gray-900 py-1 font-extrabold text-blue-900">2팀</th>
+                                                <th colSpan="2" className="border-r border-gray-900 py-1 font-extrabold text-blue-900">3팀</th>
+                                                <th colSpan="2" className="py-1 font-extrabold text-blue-900">4팀</th>
+                                            </tr>
+                                            <tr className="bg-gray-100 border-b-2 border-gray-900 text-sm font-bold text-gray-800">
+                                                <th className="border-r border-gray-400 py-1">이름</th>
+                                                <th className="border-r border-gray-900 py-1 bg-gray-200">근무수</th>
+                                                <th className="border-r border-gray-400 py-1">이름</th>
+                                                <th className="border-r border-gray-900 py-1 bg-gray-200">근무수</th>
+                                                <th className="border-r border-gray-400 py-1">이름</th>
+                                                <th className="border-r border-gray-900 py-1 bg-gray-200">근무수</th>
+                                                <th className="border-r border-gray-400 py-1">이름</th>
+                                                <th className="py-1 bg-gray-200">근무수</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Array.from({ length: maxRows }).map((_, i) => (
+                                                <tr key={i} className="border-b border-gray-400 text-[15px]">
+                                                    <td className={`border-r border-gray-400 py-1.5 font-medium ${t1[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t1[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t1[i]?.name || ''}</td>
+                                                    <td className={`border-r border-gray-900 py-1.5 font-bold ${t1[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t1[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t1[i]?.display ?? ''}</td>
+                                                    
+                                                    <td className={`border-r border-gray-400 py-1.5 font-medium ${t2[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t2[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t2[i]?.name || ''}</td>
+                                                    <td className={`border-r border-gray-900 py-1.5 font-bold ${t2[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t2[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t2[i]?.display ?? ''}</td>
+                                                    
+                                                    <td className={`border-r border-gray-400 py-1.5 font-medium ${t3[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t3[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t3[i]?.name || ''}</td>
+                                                    <td className={`border-r border-gray-900 py-1.5 font-bold ${t3[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t3[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t3[i]?.display ?? ''}</td>
+                                                    
+                                                    <td className={`border-r border-gray-400 py-1.5 font-medium ${t4[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t4[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t4[i]?.name || ''}</td>
+                                                    <td className={`py-1.5 font-bold ${t4[i]?.isLeader ? 'bg-[#ffff00]' : ''} ${t4[i]?.isExcluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t4[i]?.display ?? ''}</td>
+                                                </tr>
+                                            ))}
+                                            <tr className="border-t-2 border-gray-900 font-extrabold text-base text-gray-900">
+                                                <td colSpan="2" className="border-r border-gray-900 py-2">{teamActive[0]}</td>
+                                                <td colSpan="2" className="border-r border-gray-900 py-2">{teamActive[1]}</td>
+                                                <td colSpan="2" className="border-r border-gray-900 py-2">{teamActive[2]}</td>
+                                                <td colSpan="2" className="py-2">{teamActive[3]}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+
+                                    <div className="flex gap-4 h-full">
+                                        <div className="border-2 border-gray-900 bg-white p-4 w-1/4 flex flex-col justify-center items-center text-center rounded-lg">
+                                            <div className="font-extrabold text-gray-900 text-lg mb-2">당직</div>
+                                            <div className="font-bold text-2xl text-red-600">{dutyTeam}</div>
+                                        </div>
+                                        
+                                        <div className="border-2 border-[#1e3a8a] bg-[#f8fafc] p-5 w-3/4 rounded-xl shadow-sm flex flex-col">
+                                            <h3 className="text-xl font-extrabold text-[#1e3a8a] border-b-2 border-[#1e3a8a] pb-2 mb-3 flex items-center gap-2">
+                                                📌 금일 상황 및 특이사항
+                                            </h3>
+                                            <div className="whitespace-pre-wrap text-[15.5px] font-semibold leading-relaxed text-gray-900 mb-4">
+                                                {personnelNotes}
+                                            </div>
+                                            {eventNotes && (
+                                                <div className="mt-auto">
+                                                    <div className="font-bold text-[16px] text-gray-900 mb-1.5">[집회상황]</div>
+                                                    <div className="whitespace-pre-wrap text-[15.5px] font-semibold leading-relaxed text-gray-900">
+                                                        {eventNotes}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
